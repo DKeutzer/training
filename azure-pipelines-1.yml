@@ -57,6 +57,7 @@ stages:
     environment: 'Development'
     stageName: 'DeployDevelopment'
     webAppName: '$(DevEnvironemntWebAppName)'
+    appType: 'webAppLinux'
 - template: templates/deploy.yml
   parameters:
     deployment: 'DeployTest'
