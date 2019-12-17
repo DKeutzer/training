@@ -1,73 +1,43 @@
-# Trigger pipeline each time master branch is updated.
-trigger:
-- master
+parameters:
+  deployment: ''
+  displayName: ''
+  environment: ''
+  stageName: ''
+  webAppName: ''
+  appType: ''
+
 stages:
-- stage: 'Build'
-  displayName: 'Build Angular application'
-  jobs: 
-  - job: 'Build'
-    displayName: 'Build application'
+- stage: ${{ parameters.stageName }}
+  displayName: ${{ parameters.displayName }}
+  # Declare that stage depends on Build stage been executed successfully.
+  dependsOn: Build
+  jobs:
+  - deployment: ${{ parameters.deployment }}
     pool:
       # Virtual machine image that will be used in order to create required machine.
       vmImage: 'ubuntu-latest'
+    # Environemnt to which deployment should be performed.
+    environment: ${{ parameters.environment }}
     variables:
-      # Use variables that can be found within Build variable group.
-    - group: Build
-    steps:
-    - task: NodeTool@0
-      # Install required Node.js version on which the application will run.
-      inputs:
-        versionSpec: '10.x'
-      displayName: 'Install Node.js'
-    - task: Npm@1
-      # Install Angular Command Line Interface.
-      inputs:
-        command: 'custom'
-        customCommand: 'install -g @angular/cli'
-      displayName: 'Install Angular CLI'
-    - task: Npm@1
-      # Install required NPM packages.
-      inputs:
-        command: 'install'
-      displayName: 'Install npm packages'
-    - task: FileTransform@1
-      # Change configuration value.
-      inputs:
-        folderPath: '$(System.DefaultWorkingDirectory)/src/app/configuration/'
-        fileType: json
-        targetFiles: configuration.json
-      displayName: 'Change configuration value'
-    - task: Npm@1
-      # Build application.
-      inputs:
-        command: 'custom'
-        customCommand: 'run build'
-      displayName: 'Build app'
-    - task: PublishPipelineArtifact@1
-      # Publish application artifact.
-      inputs:
-        targetPath: '$(Pipeline.Workspace)'
-        artifact: 'app'
-        publishLocation: 'pipeline'
-      displayName: 'Publish artifact'
-- template: templates/deploy.yml
-  parameters:
-    deployment: 'DeployDevelopment'
-    displayName: 'Deploy Angular application to development environment'
-    environment: 'Development'
-    stageName: 'DeployDevelopment'
-    webAppName: '$(DevEnvironemntWebAppName)'
-- template: templates/deploy.yml
-  parameters:
-    deployment: 'DeployTest'
-    displayName: 'Deploy Angular application to test environment'
-    environment: 'Test'
-    stageName: 'DeployTest'
-    webAppName: '$(TestEnvironemntWebAppName)'
-- template: templates/deploy.yml
-  parameters:
-    deployment: 'DeployProduction'
-    displayName: 'Deploy Angular application to production environment'
-    environment: 'Production'
-    stageName: 'DeployProduction'
-    webAppName: '$(WebAppName)'
+      # Use variables that can be found within Secrets and Release variables group.
+    # Issue with the authorization.
+    # The required ConnectedServiceName variable value will be provided as a Pipeline variable.
+    #- group: Secrets
+    - group: Release
+    strategy:
+      # Run the deployment once only.
+      runOnce:
+        deploy:
+          steps:
+          - task: AzureRmWebAppDeployment@4
+            # Deploy application to chosen environment.
+            displayName: ${{ parameters.displayName }}
+            inputs:
+              azureSubscription: '$(ConnectedServiceName)'
+              appType: ${{ parameters.appType }}
+              WebAppName: ${{ parameters.webAppName }}
+              packageForLinux: '$(Pipeline.Workspace)/app/s'
+              RuntimeStack: 'NODE|10-lts'
+              StartupCommand: '$(StartupCommand)'
+              WebConfigParameters: '-Handler iisnode -NodeStartFile server.js -appType node'
+              AppSettings: '-WEBSITE_NODE_DEFAULT_VERSION 10.12.0'
